@@ -97,3 +97,33 @@ docker run --rm \
 * Список локальных образов: `docker images`
 * Список запущенных контейнеров: `docker ps`
 * Удалить старый образ: `docker rmi my-web:v1`
+ 
+
+## 6. Автоматический анализ отчета через Python (Quality Gate)
+
+Чтобы не проверять длинные логи сканера вручную, сохраняем результат проверки в структурированный формат `JSON` и разбираем его с помощью Python-скрипта.
+
+### Шаг 1. Генерация JSON-отчета
+Запускаем сканер с сохранением отчета в файл `report.json` (файл добавляем в `.gitignore`, чтобы не загружать временные отчеты в репозиторий):
+
+```bash
+docker run --rm -v .:/app aquasec/trivy fs --scanners secret -f json -o /app/report.json /app
+```
+
+### Шаг 2. Скрипт проверки (`test.py`)
+Скрипт читает `report.json`, проверяет наличие раздела `Results` и завершается с кодом ошибки `1`, если найдена утечка секретов (этот сигнал используется в CI/CD для автоматической остановки сборки):
+
+```python
+import json
+import sys
+
+with open("report.json") as f:
+    data = json.load(f)
+
+if "Results" in data:
+    print("ERROR! Secret found:", data["Results"]["Secrets"]["Title"])
+    sys.exit(1)
+else:
+    print("OK! No threats found.")
+    sys.exit(0)
+```
